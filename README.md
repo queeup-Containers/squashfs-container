@@ -17,7 +17,7 @@ podman pull docker.io/queeup/squashfs-container
 
 # OR
 
-podman pull ghcr.io/queeup/squashfs-container
+podman pull ghcr.io/queeup-containers/squashfs-container
 ```
 
 ## Use
@@ -39,4 +39,4 @@ podman run \
 podman build --tag squashfs-container --file Containerfile
 ```
 
-### [Containerfile is here](https://github.com/queeup/squashfs-container/blob/main/Containerfile)
+### [Containerfile is here](https://github.com/queeup-containers/squashfs-container/blob/main/Containerfile)
