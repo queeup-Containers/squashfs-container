@@ -1,0 +1,60 @@
+name: Version Update
+
+env:
+  APP_NAME: squashfs-tools
+  ALPINE_CHANNEL: edge
+
+permissions:
+  contents: write
+  packages: write
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Check latest versions
+        id: check
+        shell: bash
+        run: |
+          get_latest_version() {
+            curl -s "https://pkgs.alpinelinux.org/package/${{ env.ALPINE_CHANNEL}}/main/x86_64/${{ env.APP_NAME }}" | \
+              grep -oP '>\K[0-9]+\.[0-9]+\.[0-9]+-r[0-9]' | head -n 1
+          }
+
+          LATEST_VER=$(get_latest_version)
+          echo "latest_version=$LATEST_VER" >> $GITHUB_OUTPUT
+
+          # Check git tag
+          LAST_TAG=$(git tag --list --sort=-version:refname | head -n 1)
+
+          echo "Latest version found: $LATEST_VER"
+          echo "Latest tag on Git: $LAST_TAG"
+
+          if [ "$LAST_TAG" != "v$LATEST_VER" ]; then
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+            echo "Update required."
+          else
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "Already up to date."
+          fi
+
+      - name: Build and Push (Composite Action)
+        if: steps.check.outputs.needs_update == 'true'
+        uses: ./.github/actions/build
+        with:
+          app_version: ${{ steps.check.outputs.latest_version }}
+          alpine_channel: ${{ env.ALPINE_CHANNEL }}
+          docker_hub_username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          docker_hub_token: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
