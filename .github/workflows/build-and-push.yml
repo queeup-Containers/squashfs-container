@@ -1,22 +1,30 @@
 # https://docs.github.com/en/actions/publishing-packages/publishing-docker-images#publishing-images-to-docker-hub-and-github-packages
-name: Publish Container image
+name: Build and Publish Container image
 
 on:
-  push:
-    tags:
-      - 'v*'
-    paths:
-      - '**Containerfile**'
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      alpine_channel:
+        default: edge
+        required: false
+        type: string
+      app_version:
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
 
 jobs:
-  push_to_registries:
-    name: Push Container image to multiple registries
+  build-and-push:
+    name: Build and push container image to multiple registries
     runs-on: ubuntu-latest
 
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -38,6 +46,9 @@ jobs:
           images: |
             ${{ secrets.DOCKER_HUB_USERNAME }}/${{ github.event.repository.name }}
             ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=v${{ inputs.app_version }}
+            type=raw,value=latest
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -53,17 +64,32 @@ jobs:
 
       - name: Build and push
         id: docker_build
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           platforms: linux/amd64,linux/arm64,linux/arm/8,linux/arm/7,linux/arm/6
-          context: .
+          # context: .
           file: Containerfile
+          build-args: |
+            ALPINE_CHANNEL=${{ inputs.alpine_channel }}
+            APP_VERSION=${{ inputs.app_version }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+      - name: Update Git tags
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          TAG_NAME="v${{ inputs.app_version }}"
+          if git ls-remote --tags origin | grep -q "refs/tags/$TAG_NAME"; then
+            git push origin --delete "$TAG_NAME"
+            git tag -d "$TAG_NAME" || true
+          fi
+          git tag "$TAG_NAME"
+          git push origin "$TAG_NAME"
+
       - name: Update repo description
-        uses: peter-evans/dockerhub-description@v4
+        uses: peter-evans/dockerhub-description@v5
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}

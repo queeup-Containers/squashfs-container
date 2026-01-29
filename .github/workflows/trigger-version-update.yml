@@ -1,0 +1,55 @@
+name: Version Update
+
+env:
+  APP_NAME: squashfs-tools
+  ALPINE_CHANNEL: edge
+
+permissions:
+  contents: write
+  packages: write
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      alpine_channel: ${{ env.ALPINE_CHANNEL }}
+      latest_version: ${{ steps.check.outputs.latest_version }}
+      needs_update: ${{ steps.compare.outputs.needs_update }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Check latest versions
+        id: check
+        run: |
+          get_latest_version() {
+            curl -s "https://pkgs.alpinelinux.org/package/${{ env.ALPINE_CHANNEL}}/main/x86_64/${{ env.APP_NAME }}" | \
+              grep -oP '>\K[0-9]+\.[0-9]+\.[0-9]+-r[0-9]' | head -n 1
+          }
+          echo "latest_version=$(get_latest_version)" >> $GITHUB_OUTPUT
+
+      - name: Compare with last built versions
+        id: compare
+        run: |
+          if [ "$(git tag --list --sort=-version:refname | head -n 1)" != "v${{ steps.check.outputs.latest_version }}" ]; then
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+          else
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: check-version
+    if: needs.check-version.outputs.needs_update == 'true'
+    uses: ./.github/workflows/build-and-push.yml
+    secrets: inherit
+    with:
+      app_version: ${{ needs.check-version.outputs.latest_version }}
+      alpine_channel: ${{ needs.check-version.outputs.alpine_channel }}
