@@ -12,31 +12,26 @@
 
 ## Pull
 
-```bash
-podman pull docker.io/queeup/squashfs-container
-
-# OR
-
-podman pull ghcr.io/queeup-containers/squashfs-container
-```
+- `docker.io/queeup/squashfs-container`
+- `ghcr.io/queeup-containers/squashfs-container`
 
 ## Use
 
 ```bash
 podman run \
     --rm \
-    --volume `pwd`:/build \
+    --volume "$PWD":/build \
     --workdir /build \
     --interactive \
     --tty \
-    squashfs-container \
+    ghcr.io/queeup-containers/squashfs-container \
     mksquashfs system.new SYSTEM.new -noappend -comp zstd -Xcompression-level 19 -b 1048576
 ```
 
 ## Build
 
 ```bash
-podman build --tag squashfs-container --file Containerfile
+podman build --tag squashfs-container --file Containerfile .
 ```
 
 ### [Containerfile is here](https://github.com/queeup-containers/squashfs-container/blob/main/Containerfile)
